@@ -46,7 +46,7 @@ def process_docstring(app, what, name, obj, options, lines):
 		process_line(i)
 
 	# Overwrite the list items inplace, extending the list if necessary
-	for i, (k, line) in enumerate(sorted(ld.viewitems())):
+	for i, (k, line) in enumerate(sorted(ld.items())):
 		try: lines[i] = line
 		except IndexError: lines.append(line)
 

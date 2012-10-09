@@ -17,8 +17,8 @@ class ConfigMixin(object):
 
 	# Only keys listed here will be checked and (possibly) added
 	conf_keys = dict(
-		client={'id', 'secret'},
-		auth={'code', 'refresh_token', 'access_expires', 'access_token'} )
+		client=['id', 'secret'],
+		auth=['code', 'refresh_token', 'access_expires', 'access_token'] )
 
 
 	def __init__(self, **kwz):
@@ -39,7 +39,7 @@ class ConfigMixin(object):
 		conf.setdefault('conf_save', path)
 
 		conf_cls = dict()
-		for ns, keys in cls.conf_keys.viewitems():
+		for ns, keys in cls.conf_keys.items():
 			for k in keys:
 				if conf.get(ns, dict()).get(k) is not None:
 					conf_cls['{}_{}'.format(ns, k)] = conf[ns][k]
@@ -60,7 +60,7 @@ class ConfigMixin(object):
 			conf = yaml.load(io.BytesIO(conf_raw)) if conf_raw else dict()
 
 			conf_updated = False
-			for ns, keys in self.conf_keys.viewitems():
+			for ns, keys in self.conf_keys.items():
 				for k in keys:
 					v = getattr(self, '{}_{}'.format(ns, k), None)
 					if isinstance(v, unicode): v = v.encode('utf-8')

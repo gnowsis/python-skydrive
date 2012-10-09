@@ -54,6 +54,8 @@ class SkyDriveHTTPClient(object):
 		if files is not None: kwz['files'] = files
 		if headers is not None: kwz['headers'] = headers
 		code = None
+		# make sure keys are strings
+		kwz = dict([(k.encode('utf-8'), v) for k,v in kwz.iteritems()]) 
 		try:
 			res = func(url, **kwz)
 			# log.debug('Response headers: {}'.format(res.headers))
@@ -92,10 +94,10 @@ class SkyDriveAuth(SkyDriveHTTPClient):
 
 	def __init__(self, **config):
 		'Initialize API wrapper class with specified properties set.'
-		for k, v in config.viewitems():
+		for k, v in config.items():
 			try: getattr(self, k)
 			except AttributeError:
-				raise AttributeError('Unrecognized configuration key: {}'.format(k))
+				raise AttributeError('Unrecognized configuration key: {0}'.format(k))
 			setattr(self, k, v)
 
 
@@ -103,7 +105,7 @@ class SkyDriveAuth(SkyDriveHTTPClient):
 		'Build authorization URL for User Agent.'
 		# Note: default redirect_uri is **special**, app must be marked as "mobile" to use it
 		if not self.client_id: raise AuthenticationError('No client_id specified')
-		return '{}?{}'.format( self.auth_url_user, urllib.urlencode(dict(
+		return '{0}?{1}'.format( self.auth_url_user, urllib.urlencode(dict(
 			client_id=self.client_id, scope=' '.join(scope or self.auth_scope),
 			response_type='code', redirect_uri=self.auth_redirect_uri )) )
 
@@ -113,7 +115,7 @@ class SkyDriveAuth(SkyDriveHTTPClient):
 		url_qs = dict(it.chain.from_iterable(
 			urlparse.parse_qsl(v) for v in [url.query, url.fragment] ))
 		if url_qs.get('error'):
-			raise AuthenticationError('{} :: {}'.format(
+			raise AuthenticationError('{0} :: {1}'.format(
 				url_qs['error'], url_qs.get('error_description') ))
 		self.auth_code = url_qs['code']
 		return self.auth_code
@@ -141,21 +143,21 @@ class SkyDriveAuth(SkyDriveHTTPClient):
 			if k in post_data and not post_data[k] )
 		if post_data_missing_keys:
 			raise AuthenticationError( 'Insufficient authentication'
-				' data provided (missing keys: {})'.format(post_data_missing_keys) )
+				' data provided (missing keys: {0})'.format(post_data_missing_keys) )
 
 		return self.request(self.auth_url_token, method='post', data=post_data)
 
 	def _auth_token_process(self, res, check_scope=True):
 		assert res['token_type'] == 'bearer'
 		for k in 'access_token', 'refresh_token':
-			if k in res: setattr(self, 'auth_{}'.format(k), res[k])
+			if k in res: setattr(self, 'auth_{0}'.format(k), res[k])
 		self.auth_access_expires = None if 'expires_in' not in res\
 			else (datetime.utcnow() + timedelta(0, res['expires_in']))
 
 		scope_granted = res.get('scope', '').split()
 		if check_scope and set(self.auth_scope) != set(scope_granted):
 			raise AuthenticationError(
-				"Granted scope ({}) doesn't match requested one ({})."\
+				"Granted scope ({0}) doesn't match requested one ({1})."\
 				.format(', '.join(scope_granted), ', '.join(self.auth_scope)) )
 		return scope_granted
 
@@ -176,11 +178,11 @@ class SkyDriveAPIWrapper(SkyDriveAuth):
 		if pass_access_token:
 			query.setdefault('access_token', self.auth_access_token)
 		if not pass_empty_values:
-			for k,v in query.viewitems():
+			for k,v in query.items():
 				if not v:
 					raise AuthenticationError('Empty key {!r} for API call (path: {})'.format(k, path))
 		return urlparse.urljoin( self.api_url_base,
-			'{}?{}'.format(path, urllib.urlencode(query)) )
+			'{0}?{1}'.format(path, urllib.urlencode(query)) )
 
 	def __call__( self, url='me/skydrive', query=dict(),
 			query_filter=True, auth_header=False,
@@ -189,21 +191,23 @@ class SkyDriveAPIWrapper(SkyDriveAuth):
 			Shouldn't be used directly under most circumstances.'''
 		if query_filter:
 			query = dict( (k,v) for k,v in
-				query.viewitems() if v is not None )
+				query.items() if v is not None )
 		if auth_header:
 			request_kwz.setdefault('headers', dict())\
-				['Authorization'] = 'Bearer {}'.format(self.auth_access_token)
+				['Authorization'] = 'Bearer {0}'.format(self.auth_access_token)
 		kwz = request_kwz.copy()
 		kwz.setdefault('raise_for', dict())[401] = AuthenticationError
 		api_url = ft.partial( self._api_url,
 			url, query, pass_access_token=not auth_header )
+		# make sure keywords are strings
+		kwz = dict([(k.encode('utf-8'), v) for k,v in kwz.iteritems()]) 
 		try: return self.request(api_url(), **kwz)
 		except AuthenticationError:
 			if not auto_refresh_token: raise
 			self.auth_get_token()
 			if auth_header: # update auth header with a new token
 				request_kwz['headers']['Authorization']\
-					= 'Bearer {}'.format(self.auth_access_token)
+					= 'Bearer {0}'.format(self.auth_access_token)
 			return self.request(api_url(), **request_kwz)
 
 
@@ -228,7 +232,7 @@ class SkyDriveAPIWrapper(SkyDriveAuth):
 				some examples: "0-499" - byte offsets 0-499 (inclusive), "-500" - final 500 bytes.'''
 		kwz = dict()
 		if byte_range:
-			kwz['headers'] = dict(Range='bytes={}'.format(byte_range))
+			kwz['headers'] = dict(Range='bytes={0}'.format(byte_range))
 		return self(join(obj_id, 'content'), dict(download='true'), raw=True, **kwz)
 
 	def put(self, path_or_tuple, folder_id='me/skydrive', overwrite=True):
@@ -348,7 +352,7 @@ class SkyDriveAPI(SkyDriveAPIWrapper):
 				of object types to return, post-api-call processing.'''
 		lst = super(SkyDriveAPI, self).listdir(folder_id=folder_id, limit=limit)['data']
 		if type_filter:
-			if isinstance(type_filter, types.StringTypes): type_filter = {type_filter}
+			if isinstance(type_filter, types.StringTypes): type_filter = [type_filter]
 			lst = list(obj for obj in lst if obj['type'] in type_filter)
 		return lst
 
